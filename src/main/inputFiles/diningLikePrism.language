@@ -1,0 +1,55 @@
+preamble
+"dtmc";
+"const int N = 3;"
+"const int p1 = 1;"
+"const int p2 = 2;"
+"const int p3 = 3;"
+"const int p4 = 4;"
+endpreamble;
+
+
+
+crypt[i] -> i in [1...N] crypt[i] : "coin[i] = 0", "agree[i] = 0", "pay=0";
+
+{
+InitPay :=
+    if "i = 1" @crypt[i] then {
+        if "pay = 0" @crypt[i] then {
+             crypt[i] -> crypt[i] : (+ ["0.25"] "pay'=0" . Crypto
+                                     + ["0.25"] "pay'=1" . Crypto
+                                     + ["0.25"] "pay'=2" . Crypto
+                                     + ["0.25"] "pay'=3" . Crypto
+
+                                     )
+        } else { Crypto }
+    } else {
+        if "pay > 0" @crypt[i] then { Crypto }
+    }
+
+Crypto := if "coin[i] = 0" @crypt[i]
+          then {
+             crypt[i] -> crypt[i] : (+ ["0.5"] "coin[i]' = 1" . Crypto2
+                                     + ["0.5"] "coin[i]' = 2" . Crypto2)
+          }
+
+
+Crypto2 := if "coin[i]>0 && coin[i+1]>0" @crypt[i] then {
+                if "coin[i] = coin[i+1]" @crypt[i] then {
+                    if "pay=p[i]" @crypt[i] then {
+                        ["1.0"] "agree[i]'=0" @crypt[i] . Crypto3
+                        Crypto3
+                    } else {
+                        ["1.0"] "agree[i]'=1" @crypt[i] . Crypto3
+                    }
+                } else {
+                    if "pay=p[i]" @crypt[i] then {
+                        ["1.0"] "agree[i]'=1" @crypt[i] . Crypto3
+                    } else {
+                     ["1.0"] "agree[i]'=0" @crypt[i] . Crypto3
+                    }
+                }
+           }
+
+
+Crypto3 := END
+}

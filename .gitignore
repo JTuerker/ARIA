@@ -1,0 +1,21 @@
+# IntelliJ & IDE
+.idea/
+*.iml
+
+# Java / Maven
+target/
+
+# LaTeX Hilfsdateien
+*.aux
+*.bcf
+*.blg
+*.log
+*.out
+*.run.xml
+*.toc
+*.xmpdata
+*.bbl
+*.bak
+Thesis/_minted-*/
+
+

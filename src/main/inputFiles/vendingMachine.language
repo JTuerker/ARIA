@@ -1,0 +1,27 @@
+preamble
+"ctmc";
+"const int price = 2;"
+endpreamble;
+
+user -> user : "money=0";
+machine -> machine : "snack=0", "change=0";
+
+
+
+{
+Start :=
+    if "money < price" @user then {
+    ["1.0"] "money'=money+1" @user .
+        Start
+    } else {
+        Payout
+    }
+
+Payout :=
+    if "money >= price" @machine then {
+        machine -> user : (
+            + ["0.9"] "snack'=1, money'=0" . Start
+            + ["0.1"] "snack'=0, change'=1, money'=0" . Start
+        )
+    }
+}

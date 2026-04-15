@@ -1,0 +1,254 @@
+The purpose of this chapter is to formalize the syntax and semantics of the choreography language considered within the scope of this thesis. For the sake of clarity and mathematical tractability, we adopt a process-algebraic format, which makes the notation more concise and better suited for formal definitions, structural induction, and correctness proofs. This abstract representation departs slightly from the concrete syntax implemented in our tool, allowing us to focus on the underlying coordination logic and its direct mapping to probabilistic state-and-transition models.
+
+This formalization builds upon the core framework of ChoreoPRISM, as introduced by Carbone and Veschetti \cite{CarboneVeschetti}. While we maintain the fundamental principle of global coordination, our model introduces significant extensions to handle unbalanced control flows and independent probabilistic branching. These features allow for a more flexible description of distributed protocols while enabling a direct mapping to the state-and-transition representation required for Markov chain generation.
+
+In the following sections, we first define the abstract syntax of the language, followed by an operational semantics that describes how a choreography evolves alongside the system's global state. (Finally, we demonstrate how this semantic model serves as the basis for the automated generation of PRISM-compatible explicit models.)
+
+
+\section{Syntax}
+\label{sec:formal_syntax}
+The abstract syntax of the choreography language is formally defined using the Backus-Naur Form (BNF).
+
+Let $p, q$ range over a set of participants $\mathcal{P}$, $x$ over a set of variables $\textit{Var}$, and $v$ over a set of values $\textit{Val}$. 
+
+The core components of the language, choreographies $C$, are defined as follows:
+
+\begin{equation}
+	\label{eq:grammar}
+\begin{array}{r c l l}
+	C & ::= & p \to \{p_1, \dots, p_n\} : \sum_{j \in J} \lambda_j : u_j ; C_j & \textnormal{(Interaction)} \\
+	& |   & \textnormal{if } E@p \textnormal{ then } C_1 \textnormal{ [else } C_2] & \textnormal{(Conditional)} \\
+	& |   & X & \textnormal{(Recursive call)} \\
+	& |   & \mathbf{0} & \textnormal{(Inactivity)} \\
+	\mathcal{D} & ::= & X \stackrel{\textnormal{def}}{=} C, \mathcal{D} \mid \emptyset & \textnormal{(Definitions)} \\
+	u & ::= & (x' = E) \,\&\, u \mid (x' = E) & \textnormal{(Assignments)} \\
+	E, g & ::= & f(\tilde{E}) \mid x \mid v & \textnormal{(Expressions)}
+	\end{array}
+\end{equation}
+
+
+
+\paragraph{Syntactic Constructs and Extensions}
+Building on the foundation of \textcite{CarboneVeschetti}, the syntax is adapted to support the additional requirements of the probabilistic models considered in this work.
+
+\begin{itemize}
+	\item \textbf{Probabilistic Interaction:} The interaction term $p \to \{p_1, \dots, p_n\} : \sum_{j \in J} \lambda_j : u_j ; C_j$ describes an interaction initiated by participant $p$ towards a set of receivers. The mapping to Markov Chain transitions is performed by interpreting each index $j \in J$ as a distinct outgoing edge from the current configuration $(S,C)$. Specifically, for every branch $j$, the operational semantics (see \cref{sec:semantics}) defines a transition to a successor configuration $(S[u_{j}],C_{j})$ with an associated label $\lambda_{j}$. The term $u_{j}$ denotes a set of local variable updates or assignments performed by the participants during the interaction. In the generated model, the labels $\lambda_{j}$ are directly mapped to the transition rates for CTMCs or probabilities for DTMCs. This approach realizes the direct generation of the underlying stochastic model, a strategy suggested in \cite{CarboneVeschetti} to improve performance by bypassing intermediate code projection.
+	\item \textbf{Unbalanced Conditionals:} A central contribution of this work is the support for unbalanced conditionals. In our syntax, the \texttt{else} branch is optional. If omitted, it is semantically equivalent to the null choreography $\mathbf{0}$. This allows for the modeling of "fire-and-forget" or "trigger-based" logic where certain participants only act if a specific condition is met, without forcing a synchronized alternative path.
+	\item \textbf{Assignments and State Updates:} The term $u$ allows for multiple simultaneous state updates using the $\&$ operator. This follows the PRISM notation $x' = E$, indicating that variable $x$ will take the value of expression $E$ in the next state of the generated Markov Chain.
+\end{itemize}
+
+\section{Semantics}
+\label{sec:semantics}
+The semantics is adapted from \cite{CarboneVeschetti} and extended to support probabilistic branching and unbalanced conditionals.
+
+The operational semantics forms the core of this thesis, as it provides a formal specification of the rules governing state transitions in the system. Beyond its theoretical role, the semantics serves as the foundation for the implementation of our compiler (see \cref{ch:implementaion}). By directly reflecting these formal rules, the tool systematically explores the state space of a choreography and derives the corresponding transitions of the generated Markov chain in a mathematically sound manner. 
+
+A global state $S$ is defined as a mapping from variables to values: $S : \texttt{Var} \rightarrow \texttt{Val}.$
+We define the semantics as the smallest relation 
+$\longrightarrow^{\mathcal{D}} \subseteq (S,C) \times \mathds{R} \times (S,C)$. A transition $(S,C) \longrightarrow_{\lambda} (S^{'},C^{'}) $ denotes that the system moves from state $S$ and choreography $C$ to the new state $S^{'}$ and (residual) choreography $C^{'}$ with rate or probability $\lambda$. 
+
+\subsection{Interaction and Branching}
+\label{paragraph:interaction}
+The (Interact) rule models the synchronous communication between a single sender $p$ and a set of receivers ${p_{1},..., p_{n}}$. In the global view, this interaction is an atomic step, meaning that all involved participants synchronize and transition simultaneously. The branching behavior is inherently stochastic: the interaction offers multiple possible outcomes (branches), indexed by $J$. Each branch $k \in J$ is associated with a specific stochastic value $\lambda_{k}$, which determines the likelihood or timing of that branch being selected. The merge behavior is handled structurally by the continuations $C_{k}$: after the synchronization and the execution of local updates $u_{k}$, the system evolves into the subsequent choreography $C_{k}$. If different branches lead to the same continuation term, they effectively merge in the resulting state space. 
+
+\begin{equation}
+	\textbf{(Interact)}~~~
+	\frac{k \in J}{(S, p \to \{p_1, \dots, p_n\} : \sum_{j \in J} \lambda_j : u_j ; C_j) \longrightarrow{\lambda_k} (S[u_k], C_k)}
+\end{equation}
+
+In this rule, $J$ denotes a finite set of indices representing the possible outcomes of the interaction. For each specific branch $k \in J$, the term $\lambda_{k}$ represents the stochastic parameter of the transition. To ensure a well-defined mapping to Markovian models, we distinguish between two semantics:
+\begin{itemize}
+	\item In a \textbf{Discrete-Time Markov Chain (DTMC)}, $\lambda_{k}$ denotes a \textbf{transition probability}, where $0 \le \lambda_{k} \le 1$ and the sum of all branch probabilities must satisfy $\sum_{j \in J} \lambda_{j} = 1$.
+	\item In a \textbf{Continuous-Time Markov Chain (CTMC)}, $\lambda_{k}$ denotes a \textbf{transition rate}, representing the parameter of the exponential distribution governing the time until the interaction occurs.
+\end{itemize}
+
+
+\subsection{Conditionals and Unbalanced Flows} 
+\label{paragraph:conditionals}
+Conditionals represent local decision points determined by a specific participant $p$. The (IfThenElse) rule captures deterministic branching based on the evaluation of a local guard $E$ in the current state $S(E\downarrow_{S})$. 
+
+\begin{equation}
+	\textbf{(IfThenElse-True)}~~~
+	\frac{E \downarrow_S = \textnormal{tt}}{(S, \textnormal{if } E@p \textnormal{ then } C_1 \textnormal{ else } C_2) \longrightarrow_{1} (S, C_1)}
+\end{equation}
+
+\begin{equation}
+	\textbf{(IfThenElse-False-Balanced)}~~~
+	\frac{E \downarrow_S = \textnormal{ff}}{(S, \textnormal{if } E@p \textnormal{ then } C_1 \textnormal{ else } C_2) \longrightarrow_{1} (S, C_2)}
+\end{equation}
+
+A significant extension in our framework is the support for unbalanced conditionals, i.e. an \texttt{if}-branch without a corresponding \texttt{else}-branch. This flexibility is crucial for modeling \textit{trigger-based} protocols where certain participants only act if a specific condition is met, without necessitating a synchronized alternative path. Formally, if the guard evaluates to \texttt{false} and no alternative branch exists, the choreography terminates.
+
+\begin{equation}
+	\textbf{(IfThenElse-False-Unbalanced)}~~~
+	\frac{E \downarrow_S = \textnormal{ff}}{(S, \textnormal{if } E@p \textnormal{ then } C_1) \longrightarrow_{1} (S, \mathbf{0})}
+\end{equation}
+
+In this case, the system transitions deterministically to the inactive state $\textbf{0}$, representing the completion of the local execution flow.
+
+\subsection{Recursive Calls}
+\label{paragraph:recursion}
+To allow for the modeling of repetitive or infinite behaviors -- such as randomized retries, polling loops, or long-running protocols -- the language supports recursion through procedure calls. This mechanism enables a choreography to jump back to a previously defined point in the execution flow.
+
+\begin{equation}
+	\textbf{(Call)}~~~
+	\frac{X \stackrel{\textnormal{def}}{=} C \in \mathcal{D}}{(S, X) \longrightarrow_{1} (S, C)}
+\end{equation}
+
+In this rule $X$ denotes a unique protocol identifier, and $\mathcal{D}$ represents the global set of definitions. The notation $X \stackrel{\textnormal{def}}{=} C$ indicates that the identifier $X$ is formally defined as the choreography $C$ within this set. 
+
+From a semantic perspective the (Call) rule describes the unfolding of the identifier: the system transitions from the call $X$ to its corresponding body $C$ while maintaining the current global state $S$. Since this is a structural step in the control flow, it is treated as a deterministic transition with a weight of $1$. 
+
+
+\section{Running Example: The \texttt{VendingMachine}}
+
+In \cref{subsec:choreographic_programming_paradigm} we introduced a vending machine protocol as an informal example (see \cref{lst:vending_choreo}) to illustrate the concept of choreographic coordination. We now revisit the scenario using the formal abstract syntax and operational semantics defined in this chapter. 
+
+\begin{listing}[ht]
+	\begin{minted}{text}
+		{
+			Start :=
+			if "money < price" @user then {
+				["1.0"] "money'=money+1" @user .
+				Start
+			} else {
+				Payout
+			}
+			
+			Payout :=
+			if "money >= price" @machine then {
+				machine -> user : (
+				+ ["0.9"] "snack'=1, money'=0" . END
+				+ ["0.1"] "snack'=0, change'=1, money'=0" . END
+				)
+			}
+		}
+	\end{minted}
+	\caption{A running example: \texttt{VendingMachine}}
+	\label{lst:vending_formal}	
+\end{listing}
+
+
+The protocol models the repeated insertion of coins until the required price is reached, followed by a probabilistic payout step. This example demonstrates how recursive calls, conditional branching, and probabilistic interactions are represented in the formal syntax and how they induce a corresponding Markov chain.
+
+The informal protocol can now be expressed in the abstract syntax introduced in \cref{sec:formal_syntax}. The resulting choreography is given in~\cref{lst:vending_formal}. 
+
+
+Based on the operational semantics defined in \cref{sec:semantics}, the choreography induces a corresponding Markov chain. Each state of the Markov chain is represented as a pair $(S, C)$, where $S$ denotes the valuation of variables and $C$ the remaining choreography.
+For illustration, we consider a concrete instance with $price = 2$, resulting in the state space shown in \cref{fig:vending_markov_chain_compact}.
+
+\begin{figure}[ht]
+	\centering
+	\begin{tikzpicture}[
+		>={Stealth[inset=0pt, length=4pt]}, % Kleine Pfeilspitzen
+		node distance=2.2cm,               % Etwas kompakterer Abstand
+		every node/.style={font=\scriptsize}, 
+		state/.style={
+			draw,
+			circle,                         
+			minimum size=1.2cm,             
+			inner sep=1pt,
+			align=center}
+		]
+		
+		% 0. Der neue Start-Knoten (m=0)
+		\node[state] (s0) {
+			$C$ \\ 
+			$ch=0$ \\ 
+			$sn=0$ \\ 
+			$m=0$
+		};
+		
+		% 1. Knoten (m=1)
+		\node[state] (s1) [right=of s0] {
+			$C$ \\ 
+			$ch=0$ \\ 
+			$sn=0$ \\ 
+			$m=1$
+		};
+		
+		% 2. Knoten (m=2)
+		\node[state] (s2) [right=of s1] {
+			$C$ \\ 
+			$ch=0$ \\ 
+			$sn=0$\\
+			$m=2$
+		};
+		
+		% 3. End-Knoten Snack (m=0, sn=1)
+		\node[state] (s3) [right=of s2, yshift=0.85cm, xshift=0.75cm] {
+			$C$ \\ 
+			$ch=0$ \\ 
+			$sn=1$ \\
+			$m=0$
+		};
+		
+		% 4. End-Knoten Change (m=0, ch=1)
+		\node[state] (s4) [right=of s2, yshift=-0.9cm, xshift=0.75cm] {
+			$C$ \\ 
+			$ch=1$ \\ 
+			$sn=0$\\
+			$m=0$
+		};
+		
+		% Transitionen
+		\path[->]
+		(s0) edge node [above] {1} (s1)
+		(s1) edge node [above] {1} (s2)
+		(s2) edge [bend left=15] node [above left, pos=0.6] {0.9} (s3)
+		(s2) edge [bend right=15] node [below left, pos=0.6] {0.1} (s4);
+		
+	\end{tikzpicture}
+	\caption{Representation of the induced Markov Chain}
+	\label{fig:vending_markov_chain_compact}
+\end{figure}
+
+To make the connection between the operational semantics and the Markov chain in \cref{fig:vending_markov_chain_compact} explicit, we sketch the derivation of the first transitions for the concrete instance with $price = 2$. Let the initial valuation be
+\[
+S_0 = \{ money \mapsto 0,\; snack \mapsto 0,\; change \mapsto 0,\; price \mapsto 2 \}.
+\]
+The initial configuration is then given by
+\[
+(S_0,\; Start).
+\]
+
+Since the guard $money < price$ evaluates to true in $S_0$, the semantics selects the then-branch of the conditional in \texttt{Start}. Executing the assignment
+\[
+["1.0"]\; money' = money + 1~@user
+\]
+updates the valuation to
+\[
+S_1 = \{ money \mapsto 1,\; snack \mapsto 0,\; change \mapsto 0,\; price \mapsto 2 \},
+\]
+and the recursive call returns control to \texttt{Start}. Hence, one obtains the transition
+\[
+(S_0,\; Start) \longrightarrow (S_1,\; Start).
+\]
+
+Applying the same rule once more yields
+\[
+(S_1,\; Start) \longrightarrow (S_2,\; Payout),
+\]
+where
+\[
+S_2 = \{ money \mapsto 2,\; snack \mapsto 0,\; change \mapsto 0,\; price \mapsto 2 \}.
+\]
+At this point, the guard $money < price$ is false, so the else-branch is selected, which transfers control to \texttt{Payout}.
+
+In the configuration $(S_2,\; Payout)$, the guard $money \geq price$ evaluates to true, enabling the probabilistic interaction at the machine. According to the semantics of probabilistic branching, this yields two successor configurations:
+\[
+(S_2,\; Payout) \xrightarrow{0.9} (S_3,\; END)
+\qquad\text{and}\qquad
+(S_2,\; Payout) \xrightarrow{0.1} (S_4,\; END),
+\]
+where
+\[
+S_3 = \{ money \mapsto 0,\; snack \mapsto 1,\; change \mapsto 0,\; price \mapsto 2 \}
+\]
+and
+\[
+S_4 = \{ money \mapsto 0,\; snack \mapsto 0,\; change \mapsto 1,\; price \mapsto 2 \}.
+\]
+
+These derivation steps correspond directly to the states and transitions shown in \cref{fig:vending_markov_chain_compact}: the first two transitions are deterministic and therefore labeled with probability $1$, whereas the final payout step induces the probabilistic branching with probabilities $0.9$ and $0.1$.
+

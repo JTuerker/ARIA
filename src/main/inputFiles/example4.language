@@ -1,0 +1,19 @@
+preamble
+"ctmc";
+"const int n = 1"
+endpreamble
+;
+
+Checkout ->  Checkout : "c = 0";
+User[i] -> i in [1...n] User[i] : "u[i] = 0";
+
+{
+C0 := Checkout -> User[i] : (+["1 * lambda"] "c'=1" "u[i]'=1" . C1
+                          +["1 * lambda"] "c'=1" "u[i]'=2" . C2)
+
+C1 := Checkout -> User[i] : (["1 * mu"] "c'=0" "u[i]'=0" . C0)
+
+C2 := Checkout -> User[i] : (+["1 * theta"] "c'=1" "u[i]'=1" . C1
+                          +["1 * theta"] "c'=1" "u[i]'=2" . C2)
+
+}

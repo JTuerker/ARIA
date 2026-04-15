@@ -1,0 +1,213 @@
+\section{Grammar}
+\label{sec:grammar}
+	\begin{minted}{antlr}
+	
+	protocol : (preamble)? (varDef)? SEMICOLON (roleDef)+  CLPAR (protocolID ASSIGN blockStatement)* CRPAR ;
+	
+	protocolID : ID ;
+	
+	blockStatement : (statement)+;
+	
+	statement : branch | ifThenElse | end | internalAction | rec;
+	
+	branch : inputRole=role FROM outputRole+=role (COMMA outputRole+=role)* COLON LPAR (branchStat* | commStat )RPAR ;
+	
+	branchStat : (BRANCH SLPAR rateValues+=rate SRPAR updates DOT statement) ;
+	
+	commStat : (SLPAR rateValues+=rate SRPAR updates DOT statement) ;
+	
+	ifThenElse : IF cond AT role (COMMA cond AT role)* THEN CLPAR thenStat=statement CRPAR (ELSE CLPAR elseStat=statement CRPAR)?;
+	
+	rec : protocolID ;
+	
+	end : END (AT CLPAR roles+=role (COMMA roles+=role)* CRPAR)?;
+	
+	internalAction : SLPAR rate SRPAR message AT role DOT statement;
+	
+	updates : (SQLPAR (prec=actions) SQRPAR)? upds=message ;
+	
+	message : actions | first=DOUBLE_STRING loop | loop second=DOUBLE_STRING | loop*;
+	
+	actions : (action+=DOUBLE_STRING)? ( action+=DOUBLE_STRING)*  ;
+	
+	loop : FOREACH LPAR indexIteration=index op=(EQ | LE | GE | LEQ | GEQ | NEQ ) upperBound=index RPAR DOUBLE_STRING AT role;
+	
+	preamble : PREAMBLE (modelType SEMICOLON)? (variableDecl)* ENDPREAMBLE ;
+	
+	varDef : CHAR EQ INTEGER;
+	
+	modelType : DOUBLE_STRING;
+	
+	roleDef : role FROM (indexSpec)? roleSpec* SEMICOLON;
+	
+	roleSpec : (role (COLON (roleVar (COMMA roleVar)*))?);
+	
+	roleGroup : ID  ;
+	
+	roleIndex : ID SLPAR (index | (index BRANCH INTEGER)) SRPAR ;
+	
+	indexSpec : index IN SLPAR INTEGER DOTS upperBound=CHAR SRPAR ; 
+	
+	role : (roleGroup | roleIndex) ;
+	
+	roleVar : DOUBLE_STRING;
+	
+	variableDecl : DOUBLE_STRING;
+	
+	rate : DOUBLE_STRING ;
+	
+	cond : DOUBLE_STRING ; 
+	
+	index : CHAR ;
+	
+	SEMICOLON   : ';' ;
+	COLON 		: ':' ;
+	DOT 		: '.' ;
+	DOTS 		: '...' ;
+	COMMA		: ',' ;
+	BRANCH 		: '+' ;
+	FROM 		: '->';
+	ASSIGN 		: ':=' ;
+	NEQ 		: '!=' ;
+	EQ 			: '=' ;
+	LEQ			: '<=';
+	GEQ			: '>=';
+	LE			: '<';
+	GE			: '>';
+	UNDERSCORE 	: '_' ;
+	STAR 		: '*' ;
+	LPAR   		: '(' ;
+	RPAR   		: ')' ;
+	SLPAR   	: '[' ;
+	SRPAR   	: ']' ;
+	CLPAR  		: '{' ;
+		CRPAR  		: '}' ;
+	SQLPAR		: '<<' ;
+	SQRPAR		: '>>' ;
+	AT 			: '@' ;
+	IF 			: 'if';
+	THEN		: 'then';
+	ELSE		: 'else';
+	IFplus  	: 'IF' ;
+	ELSEplus	: 'ELSE';
+	END 		: 'END';
+	AND			: '&&' ;
+	PREAMBLE	: 'preamble';
+	ENDPREAMBLE : 'endpreamble';
+	CONST 		: 'const';
+	FOREACH		: 'foreach';
+	IN			: 'in' ;
+	WS  		: [ \t\r\n\u00a0]+ -> skip ;
+	DOUBLE_STRING : '"' ~('"')+ '"';
+	
+	//Numbers
+	fragment DIGIT : '0'..'9';    
+	INTEGER       : DIGIT+;
+	
+	//IDs
+	CHAR  : 'a'..'z' |'A'..'Z' ;
+	ID              :  (CHAR | UNDERSCORE)+ (CHAR | DIGIT | UNDERSCORE | STAR)* CHAR*;
+	
+	\end{minted}
+\captionof{listing}{Grammar for ARIA}
+\label{lst:full_grammar}
+\newpage
+\section{Vending Machine: \texttt{.sta} and \texttt{.tra} files}
+\label{sec:tra-sta-vending-machine}
+\begin{listing}[h]
+	\centering
+	\small % Schriftgröße etwas verkleinern, damit es gut nebeneinander passt
+	
+	% Linke Seite: State Vectors
+	\begin{minipage}[t]{0.48\textwidth}
+		\centering
+		\textbf{State Vectors} \\
+		\begin{minted}[fontsize=\footnotesize]{text}
+			0: [1, 1, 0, 0, 0]
+			1: [3, 1, 0, 0, 1]
+			2: [4, 1, 0, 0, 2]
+			3: [1, 1, 0, 1, 0]
+			4: [1, 1, 1, 0, 0]
+			5: [3, 1, 1, 0, 1]
+			6: [4, 1, 1, 0, 2]
+			7: [1, 1, 1, 1, 0]
+			8: [3, 1, 1, 1, 1]
+			9: [4, 1, 1, 1, 2]
+			10: [3, 1, 0, 1, 1]
+			11: [4, 1, 0, 1, 2]
+		\end{minted}
+	\end{minipage}
+	\hfill % Schiebt die beiden minipages auseinander
+	% Rechte Seite: Transitions
+	\begin{minipage}[t]{0.48\textwidth}
+		\centering
+		\textbf{Transitions} \\
+		\begin{minted}[fontsize=\footnotesize]{text}
+			12 16
+			0 1 1.0
+			1 2 1.0
+			2 3 0.9
+			2 4 0.1
+			3 10 1.0
+			4 5 1.0
+			5 6 1.0
+			6 4 0.1
+			6 7 0.9
+			7 8 1.0
+			8 9 1.0
+			9 4 0.1
+			9 7 0.9
+			10 11 1.0
+			11 3 0.9
+			11 4 0.1
+		\end{minted}
+	\end{minipage}
+	
+	\caption{State vector mapping (\texttt{.sta}, left) and the resulting transition matrix (\texttt{.tra}, right) for the VendingMachine example}
+	\label{lst:vending-states-matrix}
+\end{listing}
+\newpage
+\section{The Dining Cryptographers Protocol}
+\label{app:dining-cryptos}
+\begin{listing}[h!]
+	\begin{minted}{text}
+		preamble
+		"dtmc";
+		"const int N = 3;"
+		"const int p1 = 1;" "const int p2 = 2;" "const int p3 = 3;"
+		endpreamble;
+		
+		crypt[i] -> i in [1...N] crypt[i] : "coin[i] = 0", "agree[i] = 0", "pay=0";
+		
+		{InitPay :=
+			if "i = 1" @crypt[i] then {
+				if "pay = 0" @crypt[i] then {
+					crypt[i] -> crypt[i] : (+ ["0.25"] "pay'=0" . Crypto
+					+ ["0.25"] "pay'=1" . Crypto
+					+ ["0.25"] "pay'=2" . Crypto
+					+ ["0.25"] "pay'=3" . Crypto)
+				} else { Crypto }
+			} else {
+				if "pay > 0" @crypt[i] then { Crypto }}	
+					
+			Crypto := if "coin[i] = 0" @crypt[i]
+			then { crypt[i] -> crypt[i] : 
+			   (+ ["0.5"] "coin[i]' = 1" . Crypto2
+				+ ["0.5"] "coin[i]' = 2" . Crypto2)}
+							
+			Crypto2 := if "coin[i]>0 && coin[i+1]>0" @crypt[i] then {
+				if "coin[i] = coin[i+1]" @crypt[i] then {
+					if "pay=p[i]" @crypt[i] then {
+						["1.0"] "agree[i]'=0" @crypt[i] . Crypto3     } else {
+						["1.0"] "agree[i]'=1" @crypt[i] . Crypto3 }}else {
+					if "pay=p[i]" @crypt[i] then {
+						["1.0"] "agree[i]'=1" @crypt[i] . Crypto3
+					} else {
+						["1.0"] "agree[i]'=0" @crypt[i] . Crypto3
+			}}}	
+		
+			Crypto3 := END}		
+	\end{minted}
+	\caption{The Dining Cryptographers Protocol in the specified syntax}
+	\label{lst:dining}
+\end{listing}

@@ -1,0 +1,85 @@
+%TODO Zitate einfügen
+\section{Motivation}
+Distributed and concurrent systems have become a fundamental pillar of modern computing. They underpin a wide range of applications, including cloud services, microservice architectures, large-scale web platforms, and Internet-of-Things (IoT) ecosystems. These systems are both \emph{distributed}, meaning that components are deployed across multiple machines or network nodes, and \emph{concurrent}, meaning that many processes execute simultaneously and interact with each other. 
+
+These systems are deeply integrated into everyday applications. For example, when a user logs into an online banking platform, multiple services operate concurrently and across distributed infrastructures: authentication services verify credentials, databases process account information, fraud detection mechanisms analyze behavior, and communication services ensure secure data transfer. All of these components must coordinate correctly despite running in parallel and often on different physical machines. 
+
+As these systems grow in size and complexity, coordinating many interacting components becomes increasingly difficult. Classical problems such as race conditions, deadlocks, and unintended interference between processes remain persistent challenges~\cite{Survey2018}. 
+
+One main reason is that traditional programming models -- such as thread-based shared-memory programming, message-passing APIs, or RPC-based service architectures -- typically describe behavior only from a local perspective. Developers implement the logic of individual components or services, but the global interaction structure often remains implicit. This makes it difficult to understand how all parts of the system interact as a whole and to check whether the entire system behaves correctly. Because of subtle interactions between individual nodes, the overall system behavior is often hard to predict and may differ significantly from what one would expect based only on the behavior of single components~\cite{CarboneVeschetti}.
+
+This motivates the need for high-level abstractions that describe communication and control flow from a global perspective and support the safe design, analysis, and implementation of complex distributed systems.
+
+Choreographic programming~\cite{Montesi2023} is an emerging paradigm for describing the behavior of concurrent systems from such a global viewpoint. Instead of focusing on the internal states of individual nodes, it emphasizes coordination and communication between components. Choreographies are formal specifications of how system participants should interact. Because they are based on mathematical models, it is possible to formally prove that a system behaves as intended. Using a technique called Endpoint Projection (EPP)~\cite{Giallorenzo2018}, executable implementations for each participant can be generated automatically from the global specification. These implementations are \emph{correct-by-construction} and guarantee properties such as \emph{deadlock-freedom by design}~\cite{Giallorenzo2018,CarboneVeschetti}.
+
+In many practical applications, however, system behavior is not purely deterministic. Communication delays, message loss, randomized algorithms, and uncertain environments introduce probabilistic aspects that significantly influence the overall system behavior. To reason about such systems, probabilistic models such as Markov chains~\cite{Kwiatkowska2018,Norris1997MarkovChains} are commonly used. While these models enable quantitative analysis of properties like reliability, performance, or failure probabilities, constructing them manually for realistic distributed systems is error-prone and does not scale well. The state spaces of such models grow rapidly with the number of interacting components, making both model construction and analysis increasingly challenging.
+
+Combining choreographic programming with probabilistic modeling offers a promising way to address these challenges. A global specification provides a compact and intuitive description of system behavior, while an automated translation into probabilistic models enables rigorous quantitative analysis. However, bridging the gap between high-level choreographic descriptions and large-scale probabilistic models raises non-trivial technical questions, particularly with respect to efficient model generation, state-space exploration, and scalability. Addressing these challenges is essential to make choreographic approaches applicable to realistic probabilistic distributed systems.
+
+\section{Problem Statement and Research Objectives}
+
+\paragraph{Problem Statement} A primary example of the integration of choreographic programming and probabilistic verification is ChoreoPRISM\footnote{https://github.com/adeleveschetti/ChoreoPRISM}, a framework designed to project global choreographies into models compatible with the PRISM model checker\footnote{https://www.prismmodelchecker.org/}~\cite{Prism}. While ChoreoPRISM establishes an important link between high-level coordination and formal quantitative analysis, it currently faces limitations in terms of linguistic expressiveness. To maintain the rigorous guarantee of \emph{deadlock-freedom by design}, the current language often imposes strict structural constraints -- such as requiring perfectly balanced conditional branches (i.e. every \texttt{if} statement must be accompanied by a corresponding \texttt{else} branch) and limiting independent internal choices by participants.
+In realistic distributed scenarios, however, processes frequently follow unbalanced logic or must make independent probabilistic decisions before re-synchronizing. Attempting to incorporate these features into a choreographic language is non-trivial: increasing expressiveness often breaks the formal properties that ensure the absence of deadlocks. Currently, no formal mechanism exists within ChoreoPRISM to handle these complex, ``unbalanced'' probabilistic flows while maintaining a provably safe projection.
+
+This is where the principles of Applied Choreographies~\cite{Giallorenzo2018} become relevant. The challenge is not just to define new syntax, but to ensure that the Endpoint Projection (EPP) remains correct when the global model becomes more complex. Drawing from the ``applied'' approach, the EPP must be refined to bridge the gap between high-level probabilistic intent and the concrete, decentralized execution logic required for Markov Chain generation.
+
+The core problem of this thesis is to extend the ChoreoPRISM language to support higher expressiveness -- specifically unbalanced conditionals and independent probabilistic branching -- without compromising the inherent guarantee of deadlock-freedom. This requires a fundamental update to the EPP procedure and the underlying compiler to ensure that the resulting mathematical models (DTMCs/CTMCs) remain correct-by-design.
+
+\paragraph{Research Objectives}
+
+To build on the strengths of ChoreoPRISM and to respond to the requirements of more realistic probabilistic modeling, this thesis defines the following goal and research questions (RQ):
+
+\begin{tcolorbox}[
+	colback=white,
+	colframe=black,
+	title=Thesis Goal,
+	fonttitle=\bfseries,
+	boxrule=0.4pt,
+	arc=1mm
+	]
+How can the ChoreoPRISM framework be extended to support complex probabilistic logic, such as unbalanced conditionals and independent branching, while maintaining the formal guarantee of deadlock-freedom during model generation?	
+\end{tcolorbox}
+\begin{description}
+\item{RQ 1: How can the choreographic language be extended to support \texttt{if-then} structures without mandatory \texttt{else} branches, and what semantic rules are required to ensure that such unbalanced flows do not lead to deadlocks after a merge?} 
+
+\item{RQ 2: How can the framework support scenarios where multiple participants make independent probabilistic choices, and how can the EPP be designed to safely manage the subsequent re-synchronization of these processes?}
+
+\item{RQ 3: How can a compiler be implemented to translate the extended choreographic constructs into explicit-state Markov chains (DTMCs/CTMCs), and how can the resulting generating approach be evaluated with respect to structural correctness and practical feasibility?}
+\end{description}
+
+\section{Contributions}
+The primary contribution of this thesis is the extension of the ChoreoPRISM framework toward more expressive probabilistic choreographies and their direct translation into analyzable Markov chain models. In particular, this thesis makes the following contributions:
+
+\begin{description}
+	\item[C1: Conceptual Language Extension]
+	We propose an extension of the ChoreoPRISM language to support \emph{unbalanced conditionals} and \emph{independent probabilistic branching}. These additions increase the expressive power of the language and enable the modeling of distributed scenarios that are difficult or impossible to represent in the original framework.
+	
+	\item[C2: EPP-Guided State-Space Exploration]
+	We develop an EPP-guided exploration approach for the direct construction of explicit-state Markov chain models from probabilistic choreographies. Rather than relying exclusively on intermediate PRISM code generation, the approach systematically derives states and transitions from the choreography and preserves probabilistic information throughout model generation.
+	
+	\item[C3: Prototype Implementation and Evaluation]
+	We implement the proposed approach in a prototype tool, \textsc{ARIA}, and evaluate it on several probabilistic case studies. The evaluation shows that the extended framework is capable of generating DTMC/CTMC models for non-trivial examples and provides evidence that the approach is practically feasible for the considered benchmarks.
+\end{description}
+
+
+
+\section{Structure of the Thesis}
+%TODO überarbeite Structure of the Thesis
+This thesis is structured as follows.
+ 
+\cref{ch:background} establishes the background for the approach presented in this thesis. It introduces distributed systems as the application context and discusses choreographic programming as a paradigm for specifying communication behavior from a global perspective. In particular, it covers message-passing systems, the endpoint perspective, choreographies, and Endpoint Projection (EPP). The chapter then presents Markov chains as the formal basis for representing probabilistic system behavior and introduces the PRISM model checker, which is used in this thesis for structural validation and comparative evaluation.
+
+\cref{ch:choreography_language} formalizes the choreography language used in this thesis by defining its abstract syntax and operational semantics. For the sake of clarity and mathematical tractability, the language is presented in a process-algebraic style. This abstract representation is more suitable for formal definitions, structural reasoning, and the specification of transition rules than the concrete syntax implemented in the prototype.
+
+\cref{ch:implementaion} describes the implementation of the developed tool, including the system architecture, core data structures, and the main design decisions underlying its construction. The implementation is illustrated throughout the chapter using a running example to improve clarity and traceability.
+
+\cref{ch:evaluation} evaluates the approach using several case studies. 
+In particular, the modified Think Team protocol, a Peer-to-Peer protocol, and the Dining Cryptographers protocol are used 
+to demonstrate the applicability of the model generation approach.
+
+\cref{ch:related} discusses related work. 
+It reviews existing choreographic languages and frameworks, as well as approaches for model generation and state-space exploration, and positions this thesis within the existing body of research.
+
+Finally, \cref{ch:conclusion} concludes the thesis and outlines possible directions for future work.
+
+	
